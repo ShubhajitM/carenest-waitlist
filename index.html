@@ -8,6 +8,22 @@
   </head>
   <body>
     <div id="root"></div>
+        <div class="productecho-widget"></div>
+
+    <!-- Load remote widget script -->
+    <script src="https://productecho.com/widget-remote.js"></script>
+
+    <script>
+      window.productecho.push({
+        widget: "https://productecho.com/widgets/4dcxiM",
+        selector: ".productecho-widget",
+        lang: "en",
+        data: {
+          product: "pro",
+          name: "Product Echo Pro",
+        }
+      });
+    </script>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
