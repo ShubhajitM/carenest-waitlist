@@ -1,122 +1,107 @@
-# CareNest Waitlist Module Documentation
+# Checkout-BE Module Documentation
 
-## Introduction
+## Introduction and Purpose
 
-The **CareNest Waitlist module** powers the public-facing landing page and waitlist intent-capture system for the CareNest platform. It is designed to:
-- Present the CareNest value proposition to prospective users (families of aging parents in India)
-- Capture early interest and feedback via a secure, user-friendly waitlist form
-- Display real-time waitlist statistics and reinforce trust through transparent UI/UX
-
-This module is implemented as a React single-page application (SPA) and interacts with backend APIs to manage waitlist submissions and display live metrics.
-
----
-
-## Core Functionality
-
-- **Landing Page UI**: Presents CareNest's mission, product features, and early access offer in a clear, compelling format.
-- **Waitlist Modal**: Securely collects user information (name, email, feedback) and submits it to the backend.
-- **Live Waitlist Count**: Fetches and displays the current number of families on the waitlist.
-- **Submission State Management**: Prevents duplicate submissions using local storage and provides real-time feedback on submission status.
-- **Error Handling**: Displays server and network errors to the user in a user-friendly manner.
-
----
+The **Checkout-BE** module implements the backend logic for a retail checkout system. It manages shopping cart operations, applies pricing rules (including discounts and promotions), checks inventory, and calculates the final total for a customer's purchase. The module is designed for extensibility, allowing new pricing rules and inventory management strategies to be added with minimal changes.
 
 ## Architecture Overview
 
-```mermaid
-graph TD
-    A[User] -- interacts with --> B[CareNest Waitlist SPA (App.jsx)]
-    B -- fetches count --> C[/api/waitlist/count]
-    B -- submits form --> D[/api/waitlist/submit]
-    B -- stores flag --> E[LocalStorage]
-    C & D -- handled by --> F[Backend Waitlist API]
-    F -- (see) --> G[backend-waitlist.md]
-```
+The Checkout-BE module is composed of several core sub-modules:
+- **Checkout Process**: Handles the main checkout workflow, including scanning items and calculating totals.
+- **Shopping Cart**: Manages the items selected by the customer and tracks quantities, prices, and discounts.
+- **Inventory Management**: Maintains product stock levels and validates availability.
+- **Pricing Rules**: Encapsulates discount and promotional logic, applied dynamically during checkout.
+- **Item and SKU Models**: Define the structure and identity of products.
 
-- **App.jsx** is the main entry point and orchestrates all UI and API interactions.
-- The frontend communicates with backend endpoints for waitlist operations (see [backend-waitlist.md]).
-- LocalStorage is used to persist submission state per user/device.
-
----
-
-## Component Relationships & Data Flow
+### High-Level Architecture Diagram
 
 ```mermaid
 flowchart TD
-    subgraph React SPA
-        App[App.jsx]
-        Modal[Waitlist Modal]
-        Banner[Announcement Banner]
-        CTA[Bottom CTA]
+    subgraph Checkout-BE
+        CO[CheckOutImpl] --> SC[ShoppingCart]
+        CO --> PR[PricingRule(s)]
+        CO --> II[ItemInventory]
+        SC --> II
+        SC --> IPM[ItemPricingMap]
+        PR --> SC
+        PR --> IPM
+        SC --> ITM[Item]
+        ITM --> SKU[Sku]
+        II --> SKU
+        IPM --> SKU
     end
-    App -- opens/closes --> Modal
-    App -- updates count --> Banner
-    App -- disables CTA if submitted --> CTA
-    Modal -- submits form --> API[/api/waitlist/submit]
-    App -- fetches count --> API2[/api/waitlist/count]
-    App -- sets/gets flag --> LocalStorage
 ```
 
-- **App.jsx** manages all state and passes props to UI components.
-- The modal is conditionally rendered based on user interaction and submission state.
-- API calls are made directly from App.jsx handlers.
+## Sub-Modules and Their Functionality
 
----
+### 1. Checkout Process
+- **[CheckOutImpl](#checkout-process-sub-module)**: Orchestrates the checkout workflow, including scanning items, applying pricing rules, and finalizing the transaction.
+- **[CheckOut](#checkout-process-sub-module)**: Interface defining the contract for checkout implementations.
 
-## Process Flows
+### 2. Shopping Cart
+- **[ShoppingCart](#shopping-cart-sub-module)**: Manages cart contents, calculates totals, and applies discounts.
 
-### 1. Waitlist Count Fetch
+### 3. Inventory Management
+- **[ItemInventory](#inventory-management-sub-module)**: Tracks product stock and validates item availability.
+
+### 4. Pricing Rules
+- **[PricingRule](#pricing-rules-sub-module)**: Interface for pricing rules.
+- **[AppleTvPricingRule](#pricing-rules-sub-module)**: Implements a specific discount for Apple TV products.
+- **[SuperIpadPricingRule](#pricing-rules-sub-module)**: Implements a bulk discount for Super iPad products.
+
+### 5. Item and SKU Models
+- **[Item](#item-and-sku-models-sub-module)**: Represents a product in the system.
+- **[Sku](#item-and-sku-models-sub-module)**: Enumerates product SKUs (Stock Keeping Units).
+- **[ItemPricingMap](#item-and-sku-models-sub-module)**: Maps SKUs to their prices.
+
+## Component Relationships
+
+- The **CheckOutImpl** class is the entry point for the checkout process. It interacts with the **ShoppingCart** to add items and calculate totals, applies **PricingRule** implementations for discounts, and checks inventory via **ItemInventory**.
+- **ShoppingCart** manages the list of items, their quantities, and applies discounts. It also interacts with **ItemInventory** to reduce stock after checkout.
+- **PricingRule** implementations encapsulate discount logic and are applied to the cart during checkout.
+- **ItemInventory** ensures that stock levels are sufficient before items are added to the cart and decrements stock after purchase.
+- **Item**, **Sku**, and **ItemPricingMap** provide the data structures for representing products and their prices.
+
+## Visualizing Data Flow
+
 ```mermaid
 sequenceDiagram
     participant User
-    participant App as App.jsx
-    participant API as /api/waitlist/count
-    User->>App: Loads page
-    App->>API: GET /api/waitlist/count
-    API-->>App: { count }
-    App->>User: Display live count
+    participant CheckOutImpl
+    participant ShoppingCart
+    participant PricingRule
+    participant ItemInventory
+    participant ItemPricingMap
+
+    User->>CheckOutImpl: scan(item)
+    CheckOutImpl->>ItemInventory: checkIfProductAvailable(sku)
+    ItemInventory-->>CheckOutImpl: available?
+    CheckOutImpl->>ShoppingCart: addItemInCart(item)
+    User->>CheckOutImpl: total()
+    CheckOutImpl->>PricingRule: apply(cart)
+    PricingRule-->>CheckOutImpl: discount
+    CheckOutImpl->>ShoppingCart: addDiscount(discount)
+    CheckOutImpl->>ShoppingCart: getTotalPrice()
+    ShoppingCart->>ItemPricingMap: getPriceOfItem(sku)
+    ShoppingCart-->>CheckOutImpl: totalPrice
+    CheckOutImpl->>ShoppingCart: reduceProductCount()
+    ShoppingCart->>ItemInventory: reduceProductCount(input)
+    ItemInventory-->>ShoppingCart: stock updated
 ```
 
-### 2. Waitlist Submission
-```mermaid
-sequenceDiagram
-    participant User
-    participant App as App.jsx
-    participant API as /api/waitlist/submit
-    participant Storage as LocalStorage
-    User->>App: Opens modal, fills form, submits
-    App->>API: POST /api/waitlist/submit {name, contact, questions}
-    API-->>App: { count } or { error }
-    App->>Storage: Set 'carenest_waitlist_ok' = true
-    App->>User: Show success or error
-```
+## Sub-Module Documentation
+
+For detailed descriptions of each sub-module, see:
+- [Checkout Process Sub-Module](Checkout-Process.md)
+- [Shopping Cart Sub-Module](Shopping-Cart.md)
+- [Inventory Management Sub-Module](Inventory-Management.md)
+- [Pricing Rules Sub-Module](Pricing-Rules.md)
+- [Item and SKU Models Sub-Module](Item-and-SKU-Models.md)
+
+## Integration with Other Modules
+
+The Checkout-BE module is designed to be integrated with frontend modules and order management systems. For authentication, user management, or payment processing, refer to the respective module documentation (e.g., [User-BE.md], [Payment-BE.md]).
 
 ---
 
-## Key Functions & Handlers
-
-- **handleOpenModal**: Opens the waitlist modal if the user hasn't already submitted.
-- **handleFormSubmit**: Handles form submission, sends data to the backend, updates UI and local storage, and manages error/success states.
-- **fetchWaitlistCount**: Fetches the current waitlist count from the backend API.
-
----
-
-## Integration Points
-
-- **Backend Waitlist API**: All data persistence and validation are handled by the backend. See [backend-waitlist.md] for API contract and server-side logic.
-- **Styling & Icons**: Uses local CSS and Lucide React icons for UI consistency.
-
----
-
-## Extending & Maintaining
-
-- To change the waitlist form fields or validation, update the form state and handlers in `App.jsx`.
-- To modify backend endpoints or error handling, coordinate with the backend team (see [backend-waitlist.md]).
-- For UI/UX changes, update the relevant JSX and CSS files.
-
----
-
-## References
-- [backend-waitlist.md]: Backend API and data model for waitlist operations
-- [carenest-platform.md]: Overview of the CareNest platform architecture
-
+*This documentation provides a high-level overview. For implementation details, refer to the sub-module documentation files linked above.*
